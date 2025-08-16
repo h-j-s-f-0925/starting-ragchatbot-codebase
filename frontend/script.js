@@ -5,7 +5,7 @@ const API_URL = '/api';
 let currentSessionId = null;
 
 // DOM elements
-let chatMessages, chatInput, sendButton, totalCourses, courseTitles;
+let chatMessages, chatInput, sendButton, totalCourses, courseTitles, newChatButton;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sendButton = document.getElementById('sendButton');
     totalCourses = document.getElementById('totalCourses');
     courseTitles = document.getElementById('courseTitles');
+    newChatButton = document.getElementById('newChatButton');
     
     setupEventListeners();
     createNewSession();
@@ -29,6 +30,8 @@ function setupEventListeners() {
         if (e.key === 'Enter') sendMessage();
     });
     
+    // New Chat button
+    newChatButton.addEventListener('click', createNewSession);
     
     // Suggested questions
     document.querySelectorAll('.suggested-item').forEach(button => {
@@ -122,10 +125,27 @@ function addMessage(content, type, sources = null, isWelcome = false) {
     let html = `<div class="message-content">${displayContent}</div>`;
     
     if (sources && sources.length > 0) {
+        // Build clickable source links as individual items
+        const sourceItems = sources.map((source, index) => {
+            if (source.url && source.url.trim()) {
+                // Create clickable link that opens in new tab
+                return `<div class="source-item">
+                    <span class="source-number">${index + 1}.</span>
+                    <a href="${escapeHtml(source.url)}" target="_blank" class="source-link">${escapeHtml(source.text)}</a>
+                </div>`;
+            } else {
+                // No URL available, just show text
+                return `<div class="source-item">
+                    <span class="source-number">${index + 1}.</span>
+                    <span class="source-text">${escapeHtml(source.text)}</span>
+                </div>`;
+            }
+        }).join('');
+        
         html += `
             <details class="sources-collapsible">
                 <summary class="sources-header">Sources</summary>
-                <div class="sources-content">${sources.join(', ')}</div>
+                <div class="sources-content">${sourceItems}</div>
             </details>
         `;
     }
@@ -149,7 +169,16 @@ function escapeHtml(text) {
 async function createNewSession() {
     currentSessionId = null;
     chatMessages.innerHTML = '';
+    
+    // Re-enable input controls in case they were disabled
+    chatInput.disabled = false;
+    sendButton.disabled = false;
+    chatInput.value = '';
+    
     addMessage('Welcome to the Course Materials Assistant! I can help you with questions about courses, lessons and specific content. What would you like to know?', 'assistant', null, true);
+    
+    // Focus on input for user convenience
+    chatInput.focus();
 }
 
 // Load course statistics

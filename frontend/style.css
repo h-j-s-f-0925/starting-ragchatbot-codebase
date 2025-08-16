@@ -241,8 +241,68 @@ header h1 {
 }
 
 .sources-content {
-    padding: 0 0.5rem 0.25rem 1.5rem;
+    padding: 0.5rem 0.5rem 0.25rem 1rem;
     color: var(--text-secondary);
+}
+
+/* Source item container */
+.source-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    padding: 0.5rem;
+    background: rgba(37, 99, 235, 0.05);
+    border-radius: 6px;
+    border-left: 3px solid var(--primary-color);
+    transition: all 0.2s ease;
+}
+
+.source-item:hover {
+    background: rgba(37, 99, 235, 0.1);
+    transform: translateX(2px);
+}
+
+.source-item:last-child {
+    margin-bottom: 0;
+}
+
+/* Source number styling */
+.source-number {
+    color: var(--primary-color);
+    font-weight: 600;
+    font-size: 0.75rem;
+    min-width: 1.2rem;
+    margin-top: 0.1rem;
+}
+
+/* Source link styles */
+.source-link {
+    color: var(--text-primary);
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    line-height: 1.4;
+    flex: 1;
+}
+
+.source-link:hover {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
+.source-link:focus {
+    outline: none;
+    color: var(--primary-color);
+    text-decoration: underline;
+    border-radius: 3px;
+}
+
+.source-text {
+    color: var(--text-primary);
+    font-weight: 500;
+    line-height: 1.4;
+    flex: 1;
 }
 
 /* Markdown formatting styles */
@@ -599,6 +659,36 @@ details[open] .suggested-header::before {
     color: var(--text-secondary);
     font-style: italic;
     text-transform: none;
+}
+
+/* New Chat Button */
+.new-chat-button {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.5rem 0;
+    border: none;
+    background: none;
+    list-style: none;
+    outline: none;
+    transition: color 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: left;
+    width: 100%;
+}
+
+.new-chat-button:focus {
+    color: var(--primary-color);
+}
+
+.new-chat-button:hover {
+    color: var(--primary-color);
+}
+
+.new-chat-button:active {
+    color: var(--primary-color);
 }
 
 /* Suggested Questions in Sidebar */

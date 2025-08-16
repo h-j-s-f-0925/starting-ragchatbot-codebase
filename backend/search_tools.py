@@ -88,7 +88,7 @@ class CourseSearchTool(Tool):
     def _format_results(self, results: SearchResults) -> str:
         """Format search results with course and lesson context"""
         formatted = []
-        sources = []  # Track sources for the UI
+        sources = []  # Track sources for the UI (now includes URLs)
         
         for doc, meta in zip(results.documents, results.metadata):
             course_title = meta.get('course_title', 'unknown')
@@ -100,10 +100,21 @@ class CourseSearchTool(Tool):
                 header += f" - Lesson {lesson_num}"
             header += "]"
             
-            # Track source for the UI
-            source = course_title
+            # Track source for the UI with URL if available
+            source_text = course_title
             if lesson_num is not None:
-                source += f" - Lesson {lesson_num}"
+                source_text += f" - Lesson {lesson_num}"
+            
+            # Get lesson link from vector store
+            lesson_url = None
+            if lesson_num is not None:
+                lesson_url = self.store.get_lesson_link(course_title, lesson_num)
+            
+            # Create source object with both text and URL
+            source = {
+                "text": source_text,
+                "url": lesson_url
+            }
             sources.append(source)
             
             formatted.append(f"{header}\n{doc}")
@@ -112,6 +123,107 @@ class CourseSearchTool(Tool):
         self.last_sources = sources
         
         return "\n\n".join(formatted)
+
+
+class CourseOverviewTool(Tool):
+    """Tool for retrieving complete course overview including metadata and lesson structure"""
+    
+    def __init__(self, vector_store: VectorStore):
+        self.store = vector_store
+        self.last_sources = []  # Track sources from last overview request
+    
+    def get_tool_definition(self) -> Dict[str, Any]:
+        """Return Anthropic tool definition for this tool"""
+        return {
+            "name": "get_course_overview",
+            "description": "Get complete course overview including title, instructor, course link, and full lesson structure",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "course_title": {
+                        "type": "string",
+                        "description": "Course title to get overview for (partial matches work, e.g. 'MCP', 'Introduction')"
+                    }
+                },
+                "required": ["course_title"]
+            }
+        }
+    
+    def execute(self, course_title: str) -> str:
+        """
+        Execute the course overview tool with given course title.
+        
+        Args:
+            course_title: Course title to get overview for
+            
+        Returns:
+            Formatted course overview or error message
+        """
+        
+        # Resolve course name using vector store's course name resolution
+        resolved_title = self.store._resolve_course_name(course_title)
+        if not resolved_title:
+            return f"No course found matching '{course_title}'"
+        
+        # Get all courses metadata
+        all_courses = self.store.get_all_courses_metadata()
+        
+        # Find the specific course
+        target_course = None
+        for course in all_courses:
+            if course.get('title') == resolved_title:
+                target_course = course
+                break
+        
+        if not target_course:
+            return f"Course metadata not found for '{resolved_title}'"
+        
+        # Format the course overview
+        return self._format_course_overview(target_course)
+    
+    def _format_course_overview(self, course_meta: Dict[str, Any]) -> str:
+        """Format course metadata into a comprehensive overview"""
+        title = course_meta.get('title', 'Unknown Title')
+        instructor = course_meta.get('instructor', 'Unknown Instructor')
+        course_link = course_meta.get('course_link', '')
+        lessons = course_meta.get('lessons', [])
+        
+        # Build course overview
+        overview = []
+        overview.append(f"Course Title: {title}")
+        overview.append(f"Instructor: {instructor}")
+        
+        if course_link:
+            overview.append(f"Course Link: {course_link}")
+        
+        overview.append(f"Total Lessons: {len(lessons)}")
+        overview.append("")  # Empty line
+        
+        # Add lesson structure
+        if lessons:
+            overview.append("Lesson Structure:")
+            for lesson in lessons:
+                lesson_num = lesson.get('lesson_number', 'Unknown')
+                lesson_title = lesson.get('lesson_title', 'Unknown Title')
+                lesson_link = lesson.get('lesson_link', '')
+                
+                lesson_line = f"Lesson {lesson_num}: {lesson_title}"
+                if lesson_link:
+                    lesson_line += f" (Link: {lesson_link})"
+                
+                overview.append(lesson_line)
+        else:
+            overview.append("No lesson information available")
+        
+        # Track source for the UI
+        source = {
+            "text": f"{title} - Course Overview",
+            "url": course_link if course_link else None
+        }
+        self.last_sources = [source]
+        
+        return "\n".join(overview)
+
 
 class ToolManager:
     """Manages available tools for the AI"""

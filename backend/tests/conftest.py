@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Mock Configuration Fixtures
 # ======================================
 
+
 @pytest.fixture
 def mock_config():
     """Create a mock configuration for testing."""
@@ -36,6 +37,7 @@ def mock_config():
 # ======================================
 # AI Generator Fixtures
 # ======================================
+
 
 @pytest.fixture
 def mock_anthropic_client():
@@ -57,6 +59,7 @@ def mock_ai_generator(mock_anthropic_client):
 # Vector Store Fixtures
 # ======================================
 
+
 @pytest.fixture
 def mock_vector_store():
     """Create a mock vector store for testing."""
@@ -65,7 +68,7 @@ def mock_vector_store():
         documents=["Sample document content"],
         metadata=[{"course_title": "Test Course", "lesson_number": 1}],
         distances=[0.1],
-        error=None
+        error=None,
     )
     store.get_course_count.return_value = 1
     store.get_existing_course_titles.return_value = ["Test Course"]
@@ -76,6 +79,7 @@ def mock_vector_store():
 # ======================================
 # Tool and Manager Fixtures
 # ======================================
+
 
 @pytest.fixture
 def mock_tool_manager():
@@ -109,6 +113,7 @@ def mock_overview_tool():
 # Session Management Fixtures
 # ======================================
 
+
 @pytest.fixture
 def mock_session_manager():
     """Create a mock session manager."""
@@ -123,6 +128,7 @@ def mock_session_manager():
 # Document Processing Fixtures
 # ======================================
 
+
 @pytest.fixture
 def mock_document_processor():
     """Create a mock document processor."""
@@ -133,6 +139,7 @@ def mock_document_processor():
 # ======================================
 # Sample Data Fixtures
 # ======================================
+
 
 @pytest.fixture
 def sample_tools():
@@ -146,8 +153,8 @@ def sample_tools():
                 "properties": {
                     "query": {"type": "string", "description": "What to search for"}
                 },
-                "required": ["query"]
-            }
+                "required": ["query"],
+            },
         },
         {
             "name": "get_course_overview",
@@ -155,11 +162,14 @@ def sample_tools():
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "course_name": {"type": "string", "description": "Name of the course"}
+                    "course_name": {
+                        "type": "string",
+                        "description": "Name of the course",
+                    }
                 },
-                "required": ["course_name"]
-            }
-        }
+                "required": ["course_name"],
+            },
+        },
     ]
 
 
@@ -167,14 +177,15 @@ def sample_tools():
 def sample_search_results():
     """Sample search results for testing."""
     from vector_store import SearchResults
+
     return SearchResults(
         documents=["Course content about Python", "Advanced Python concepts"],
         metadata=[
             {"course_title": "Python Course", "lesson_number": 1, "chunk_index": 0},
-            {"course_title": "Python Course", "lesson_number": 2, "chunk_index": 1}
+            {"course_title": "Python Course", "lesson_number": 2, "chunk_index": 1},
         ],
         distances=[0.1, 0.2],
-        error=None
+        error=None,
     )
 
 
@@ -183,13 +194,14 @@ def sample_sources():
     """Sample source data for testing."""
     return [
         {"text": "Python Course - Lesson 1", "url": "https://example.com/lesson1"},
-        {"text": "Python Course - Lesson 2", "url": "https://example.com/lesson2"}
+        {"text": "Python Course - Lesson 2", "url": "https://example.com/lesson2"},
     ]
 
 
 # ======================================
 # Mock Component Bundle Fixtures
 # ======================================
+
 
 @pytest.fixture
 def mock_rag_components(
@@ -199,17 +211,17 @@ def mock_rag_components(
     mock_session_manager,
     mock_search_tool,
     mock_overview_tool,
-    mock_tool_manager
+    mock_tool_manager,
 ):
     """Bundle of all RAG system components for integration testing."""
     return {
-        'document_processor': mock_document_processor,
-        'vector_store': mock_vector_store,
-        'ai_generator': mock_ai_generator,
-        'session_manager': mock_session_manager,
-        'search_tool': mock_search_tool,
-        'overview_tool': mock_overview_tool,
-        'tool_manager': mock_tool_manager
+        "document_processor": mock_document_processor,
+        "vector_store": mock_vector_store,
+        "ai_generator": mock_ai_generator,
+        "session_manager": mock_session_manager,
+        "search_tool": mock_search_tool,
+        "overview_tool": mock_overview_tool,
+        "tool_manager": mock_tool_manager,
     }
 
 
@@ -217,9 +229,12 @@ def mock_rag_components(
 # Test Markers Configuration
 # ======================================
 
+
 def pytest_configure(config):
     """Configure pytest markers."""
     config.addinivalue_line("markers", "unit: Unit tests for individual components")
-    config.addinivalue_line("markers", "integration: Integration tests across multiple components")
+    config.addinivalue_line(
+        "markers", "integration: Integration tests across multiple components"
+    )
     config.addinivalue_line("markers", "e2e: End-to-end tests with real components")
     config.addinivalue_line("markers", "slow: Tests that take longer to run")

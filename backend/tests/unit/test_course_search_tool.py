@@ -1,17 +1,8 @@
 import pytest
 from unittest.mock import Mock
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from search_tools import CourseSearchTool
 from vector_store import SearchResults
-
-
-@pytest.fixture
-def mock_vector_store():
-    """Create a mock vector store for testing"""
-    return Mock()
 
 
 @pytest.fixture
@@ -20,6 +11,7 @@ def search_tool(mock_vector_store):
     return CourseSearchTool(mock_vector_store)
 
 
+@pytest.mark.unit
 class TestCourseSearchTool:
     """Test cases for CourseSearchTool.execute method"""
 

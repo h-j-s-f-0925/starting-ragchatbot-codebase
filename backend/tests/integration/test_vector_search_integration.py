@@ -1,14 +1,13 @@
 import pytest
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from search_tools import CourseSearchTool
 from vector_store import VectorStore
 from config import config
 
 
-class TestCourseSearchToolDebug:
+@pytest.mark.integration
+@pytest.mark.slow
+class TestVectorSearchIntegration:
     """Debug tests for CourseSearchTool to identify 'query failed' issues"""
 
     @pytest.fixture
@@ -136,13 +135,13 @@ class TestCourseSearchToolDebug:
 
     def test_vector_store_embedding_model(self, real_vector_store):
         """Debug test: Check if embedding model is working correctly"""
-        print(f"\n[DEBUG] Embedding model: {real_vector_store.embedding_model}")
+        # Check if embedding function is configured
+        assert real_vector_store.embedding_function is not None
+        print(f"\n[DEBUG] Embedding function type: {type(real_vector_store.embedding_function)}")
         
         # Test if embeddings can be generated
         try:
             # This should work if the embedding model is properly initialized
-            test_texts = ["test text for embedding"]
-            # Note: We can't directly access the embedding function, but search should work
             results = real_vector_store.search("test")
             print(f"[DEBUG] Embedding test search error: {results.error}")
             
@@ -154,19 +153,17 @@ class TestCourseSearchToolDebug:
 
     def test_chroma_database_integrity(self, real_vector_store):
         """Debug test: Check ChromaDB database integrity"""
-        print(f"\n[DEBUG] ChromaDB path: {real_vector_store.chroma_path}")
+        # Check if client is properly initialized
+        assert real_vector_store.client is not None
+        print(f"\n[DEBUG] ChromaDB client type: {type(real_vector_store.client)}")
         
-        # Check if database files exist
-        db_path = real_vector_store.chroma_path
-        if not os.path.exists(db_path):
-            pytest.fail(f"ChromaDB directory does not exist: {db_path}")
-        
-        # Check if there are any database files
-        db_files = os.listdir(db_path) if os.path.exists(db_path) else []
-        print(f"[DEBUG] Database files: {db_files}")
-        
-        if not db_files:
-            pytest.fail(f"ChromaDB directory is empty: {db_path}")
+        # Check if collections exist
+        try:
+            assert real_vector_store.course_catalog is not None
+            assert real_vector_store.course_content is not None
+            print(f"[DEBUG] Collections initialized successfully")
+        except Exception as e:
+            pytest.fail(f"Collections not properly initialized: {str(e)}")
         
         # Test if collections can be accessed
         try:

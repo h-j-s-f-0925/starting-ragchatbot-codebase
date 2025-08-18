@@ -14,6 +14,7 @@ dependencies = [
     "python-dotenv==1.1.1",
     "pytest>=7.0.0",
     "httpx>=0.24.0",
+    "black>=24.0.0",
 ]
 
 [tool.pytest.ini_options]
@@ -40,3 +41,25 @@ filterwarnings = [
     "ignore::PendingDeprecationWarning",
     "ignore:resource_tracker.*:UserWarning"
 ]
+
+[tool.black]
+line-length = 88
+target-version = ['py313']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | chroma_db
+)/
+'''

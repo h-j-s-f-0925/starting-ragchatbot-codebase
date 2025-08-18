@@ -115,3 +115,38 @@ Simple HTML/CSS/JavaScript frontend (`frontend/`):
 - Error handling preserves user experience with graceful degradation
 - サーバー実行は必ずUVを使い、pipは直接使わない
 - すべての依存関係を管理するためにuv を使ってください。
+
+## Code Quality Tools
+
+### Code Formatting with Black
+This project uses Black for automatic code formatting to ensure consistency.
+
+Configuration is in `pyproject.toml` with these settings:
+- Line length: 88 characters
+- Target Python version: 3.13
+- Excludes: .venv, build directories, chroma_db
+
+### Development Scripts
+Use the `scripts/dev-tools.sh` script for code quality tasks:
+
+```bash
+# Format all Python code
+./scripts/dev-tools.sh format
+
+# Check code formatting and quality
+./scripts/dev-tools.sh check
+
+# Automatically fix code issues
+./scripts/dev-tools.sh fix
+
+# Install dependencies
+./scripts/dev-tools.sh install
+```
+
+### Pre-development Commands
+Before committing code, always run:
+```bash
+./scripts/dev-tools.sh check
+```
+
+This ensures consistent code formatting across the codebase.

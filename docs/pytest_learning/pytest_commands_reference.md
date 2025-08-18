@@ -2,7 +2,9 @@
 
 ## 📋 このリファレンスについて
 
-実際のRAGシステムプロジェクトで使用したpytestコマンドを基に、よく使うコマンドから高度な使い方まで体系的にまとめました。開発現場ですぐに活用できる実践的なリファレンスです。
+実際のRAGシステムプロジェクトで使用したpytestコマンドを基に、よく使うコマンドから高度な使い方まで体系的にまとめました。FastAPIのAPIエンドポイントテストコマンドも含む、開発現場ですぐに活用できる実践的なリファレンスです。
+
+**新機能**: APIテスト専用のコマンドパターンとマーカー使用例を追加
 
 ---
 
@@ -166,6 +168,80 @@ pytest -m "unit or integration" -v
 
 # リリース前（全テスト）
 pytest -m "unit or integration or e2e" --tb=short
+```
+
+---
+
+## 🌐 APIテスト専用コマンド
+
+### 17. FastAPI エンドポイントテスト
+
+```bash
+# API テストのみ実行
+pytest tests/api/ -v
+
+# 特定のAPIエンドポイントテスト
+pytest tests/api/test_app.py::TestQueryEndpoint -v
+
+# APIテストマーカー使用
+pytest -m api -v --tb=short
+
+# API統合テスト
+pytest -m "api and integration" -v
+
+# API テスト高速実行（遅いテスト除外）
+pytest -m "api and not slow" -q
+
+# APIエラーハンドリングのみテスト
+pytest tests/api/ -k "error" -v
+```
+
+### 18. APIテストのデバッグ
+
+```bash
+# API テストでprint文表示
+pytest tests/api/test_app.py -s -v
+
+# 特定のAPIテストをデバッグモードで実行
+pytest tests/api/test_app.py::test_query_endpoint -vv -s --pdb
+
+# APIレスポンスの詳細を確認
+pytest tests/api/ -vv --tb=long
+
+# APIテスト実行時間測定
+pytest tests/api/ --durations=5
+```
+
+### 19. APIテスト環境別実行
+
+```bash
+# 開発環境でのAPIテスト（高速）
+pytest -m "api and not slow" --tb=short -q
+
+# テスト環境での包括的APIチェック
+pytest tests/api/ -v --tb=line --maxfail=3
+
+# CI/CD環境でのAPIテスト
+pytest -m api --tb=short --junitxml=api-results.xml
+
+# APIカバレッジ測定
+pytest tests/api/ --cov=src --cov-report=html
+```
+
+### 20. APIテストのパフォーマンス測定
+
+```bash
+# API テストの実行時間分析
+pytest tests/api/ --durations=10 -v
+
+# 並列でのAPIテスト実行
+pytest tests/api/ -n auto
+
+# メモリ使用量を抑制したAPIテスト
+pytest tests/api/ --forked
+
+# APIテスト結果のHTML報告
+pytest tests/api/ --html=api-report.html --self-contained-html
 ```
 
 ---
@@ -482,9 +558,12 @@ alias pt="pytest"
 alias ptu="pytest tests/unit/ -v"
 alias pti="pytest tests/integration/ -v" 
 alias pte="pytest tests/e2e/ -v"
+alias pta="pytest tests/api/ -v"        # API テスト用
 alias ptf="pytest --lf -v"
 alias ptq="pytest -q --tb=line"
 alias ptc="pytest --cov=src --cov-report=term-missing"
+alias ptapi="pytest -m api -v"          # APIマーカー用
+alias ptfast="pytest -m 'not slow' -q"  # 高速テスト用
 ```
 
 ---
@@ -559,7 +638,8 @@ markers =
     integration: Integration tests across multiple components
     e2e: End-to-end tests with real components  
     slow: Tests that take longer to run
-    api: Tests that require API access
+    api: API endpoint tests (FastAPI/Web)
+    external_api: Tests that require external API access
 ```
 
 ### 必須プラグイン
@@ -589,9 +669,10 @@ pip install pytest-benchmark
 
 **覚えておくべき基本パターン:**
 1. **開発中**: `pytest -m "not slow" -v`
-2. **デバッグ**: `pytest path/to/test.py::test_name -vv -s --pdb`
-3. **CI/CD**: `pytest --tb=short --junitxml=results.xml`
-4. **カバレッジ**: `pytest --cov=src --cov-report=html`
+2. **APIテスト**: `pytest -m api -v --tb=short`
+3. **デバッグ**: `pytest path/to/test.py::test_name -vv -s --pdb`
+4. **CI/CD**: `pytest --tb=short --junitxml=results.xml`
+5. **カバレッジ**: `pytest --cov=src --cov-report=html`
 
 継続的な使用を通じて、自分の開発スタイルに最適なコマンド組み合わせを見つけてください。
 

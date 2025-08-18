@@ -2,7 +2,9 @@
 
 ## 📋 このドキュメントについて
 
-実際のRAGシステム開発プロジェクトで学んだ、pytestを使った効果的なテスト設計・実装のベストプラクティスをまとめました。チーム開発で即活用できる実践的なガイドラインです。
+実際のRAGシステム開発プロジェクトで学んだ、pytestを使った効果的なテスト設計・実装のベストプラクティスをまとめました。APIテスト、単体テスト、統合テストを含む包括的なチーム開発ガイドラインです。
+
+**新機能**: FastAPI・APIエンドポイントテストのベストプラクティスも追加しました。
 
 ---
 
@@ -30,9 +32,16 @@ project/
 │   │   ├── __init__.py
 │   │   ├── test_rag_system.py
 │   │   └── test_api_integration.py
-│   └── e2e/              # E2Eテスト
+│   ├── api/               # API エンドポイントテスト
+│   │   ├── __init__.py
+│   │   ├── test_app.py
+│   │   └── test_endpoints.py
+│   ├── e2e/              # E2Eテスト
+│   │   ├── __init__.py
+│   │   └── test_live_system.py
+│   └── utils/            # テスト用ユーティリティ
 │       ├── __init__.py
-│       └── test_live_system.py
+│       └── test_app.py   # テスト用アプリ設定
 ├── pytest.ini            # pytest設定
 └── requirements.txt
 ```
@@ -91,6 +100,280 @@ test_ai_generator.py
 test_ai_generator_basic.py     # 220行 - 基本機能
 test_ai_generator_tools.py     # 178行 - ツール実行
 test_ai_generator_sequential.py # 172行 - 順次呼び出し
+```
+
+---
+
+## 🌐 APIテストのベストプラクティス
+
+### 25. FastAPI テストの設計原則
+
+**テスト用アプリの分離:**
+```python
+# tests/utils/test_app.py
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
+from unittest.mock import Mock, patch
+
+def create_test_app():
+    """静的ファイルマウントを避けたテスト用アプリ"""
+    app = FastAPI(title="Test RAG System")
+    
+    # ミドルウェア設定は本番と同じ
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"]
+    )
+    
+    # エンドポイント定義（本番と同一ロジック）
+    @app.post("/api/query", response_model=QueryResponse)
+    async def test_query(request: QueryRequest):
+        # モック化されたRAGシステムを使用
+        mock_rag = get_mock_rag_system()
+        answer, sources = mock_rag.query(request.query, request.session_id)
+        
+        return QueryResponse(
+            answer=answer,
+            sources=[Source(**s) if isinstance(s, dict) else Source(text=str(s), url=None) 
+                    for s in sources],
+            session_id=request.session_id or "test_session"
+        )
+    
+    return app
+
+def get_mock_rag_system():
+    """設定可能なモックRAGシステム"""
+    mock = Mock()
+    mock.query.return_value = (
+        "テスト応答", 
+        [{"text": "テストソース", "url": "https://example.com"}]
+    )
+    return mock
+```
+
+### 26. APIテストのfixtureパターン
+
+**階層的fixture設計:**
+```python
+# conftest.py
+import pytest
+from fastapi.testclient import TestClient
+from tests.utils.test_app import create_test_app
+
+@pytest.fixture
+def test_app():
+    """テスト用FastAPIアプリ"""
+    return create_test_app()
+
+@pytest.fixture
+def test_client(test_app):
+    """HTTPテストクライアント"""
+    return TestClient(test_app)
+
+@pytest.fixture
+def api_headers():
+    """API リクエスト用ヘッダー"""
+    return {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "TestClient/1.0"
+    }
+
+@pytest.fixture
+def sample_queries():
+    """テスト用クエリデータ"""
+    return {
+        "simple": {"query": "Pythonとは何ですか？"},
+        "with_session": {
+            "query": "変数について教えて", 
+            "session_id": "test_session_123"
+        },
+        "empty": {"query": ""},
+        "long": {"query": "非常に長い質問" + "..." * 100}
+    }
+
+@pytest.fixture
+def expected_responses():
+    """期待されるレスポンス形式"""
+    return {
+        "success": {
+            "answer": str,
+            "sources": list,
+            "session_id": str
+        },
+        "error": {
+            "detail": str
+        }
+    }
+```
+
+### 27. APIテストのパターン分類
+
+**✅ 包括的なAPIテストスイート:**
+```python
+# tests/api/test_app.py
+import pytest
+from fastapi.testclient import TestClient
+
+@pytest.mark.api
+class TestQueryEndpoint:
+    """クエリエンドポイントの包括的テスト"""
+    
+    def test_valid_query_success(self, test_client, sample_queries):
+        """有効なクエリで成功レスポンス"""
+        response = test_client.post("/api/query", json=sample_queries["simple"])
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        # レスポンス構造の検証
+        assert "answer" in data
+        assert "sources" in data
+        assert "session_id" in data
+        
+        # データ型の検証
+        assert isinstance(data["answer"], str)
+        assert isinstance(data["sources"], list)
+        assert len(data["answer"]) > 0
+    
+    def test_session_management(self, test_client, sample_queries):
+        """セッション管理テスト"""
+        # 新しいセッション作成
+        response1 = test_client.post("/api/query", json=sample_queries["simple"])
+        session_id = response1.json()["session_id"]
+        
+        # 既存セッション使用
+        query_with_session = sample_queries["with_session"].copy()
+        query_with_session["session_id"] = session_id
+        
+        response2 = test_client.post("/api/query", json=query_with_session)
+        
+        assert response2.status_code == 200
+        assert response2.json()["session_id"] == session_id
+    
+    def test_error_handling(self, test_client):
+        """エラーハンドリングテスト"""
+        # 無効なJSON
+        response = test_client.post("/api/query", data="invalid json")
+        assert response.status_code == 422
+        
+        # 必須フィールド不足
+        response = test_client.post("/api/query", json={"invalid": "field"})
+        assert response.status_code == 422
+        
+        # 空のクエリ（バリデーション）
+        response = test_client.post("/api/query", json={"query": ""})
+        assert response.status_code in [200, 422]  # アプリの仕様による
+
+@pytest.mark.api
+class TestCourseEndpoint:
+    """コース情報エンドポイントテスト"""
+    
+    def test_course_stats_success(self, test_client):
+        """コース統計の正常取得"""
+        response = test_client.get("/api/courses")
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert "total_courses" in data
+        assert "course_titles" in data
+        assert isinstance(data["total_courses"], int)
+        assert isinstance(data["course_titles"], list)
+        assert data["total_courses"] >= 0
+        assert len(data["course_titles"]) == data["total_courses"]
+
+@pytest.mark.api
+@pytest.mark.integration
+class TestAPIWorkflow:
+    """APIワークフローの統合テスト"""
+    
+    def test_complete_user_journey(self, test_client):
+        """完全なユーザージャーニー"""
+        # 1. コース一覧を取得
+        courses_response = test_client.get("/api/courses")
+        assert courses_response.status_code == 200
+        
+        # 2. 質問を投稿
+        query_response = test_client.post(
+            "/api/query", 
+            json={"query": "最初のコースについて教えて"}
+        )
+        assert query_response.status_code == 200
+        session_id = query_response.json()["session_id"]
+        
+        # 3. フォローアップ質問
+        followup_response = test_client.post(
+            "/api/query",
+            json={"query": "もっと詳しく", "session_id": session_id}
+        )
+        assert followup_response.status_code == 200
+        assert followup_response.json()["session_id"] == session_id
+```
+
+### 28. APIテストでのモック戦略
+
+**段階的モック設計:**
+```python
+# conftest.py - API専用fixture
+@pytest.fixture
+def mock_rag_responses():
+    """シナリオ別のRAG応答"""
+    return {
+        "python_basic": {
+            "answer": "Pythonは高レベルプログラミング言語です。",
+            "sources": [
+                {"text": "Python公式ドキュメント", "url": "https://docs.python.org"},
+                {"text": "入門チュートリアル", "url": None}
+            ]
+        },
+        "error_case": {
+            "exception": Exception("データベース接続エラー")
+        },
+        "empty_result": {
+            "answer": "申し訳ございませんが、関連する情報が見つかりません。",
+            "sources": []
+        }
+    }
+
+@pytest.fixture
+def configurable_mock_rag(mock_rag_responses):
+    """設定可能なRAGシステムモック"""
+    def _create_mock(scenario="python_basic"):
+        with patch('app.rag_system') as mock:
+            if "exception" in mock_rag_responses.get(scenario, {}):
+                mock.query.side_effect = mock_rag_responses[scenario]["exception"]
+            else:
+                response_data = mock_rag_responses[scenario]
+                mock.query.return_value = (
+                    response_data["answer"], 
+                    response_data["sources"]
+                )
+            
+            mock.session_manager.create_session.return_value = "test_session_123"
+            mock.get_course_analytics.return_value = {
+                "total_courses": 2,
+                "course_titles": ["Python基礎", "Web開発"]
+            }
+            return mock
+    
+    return _create_mock
+
+# テストでの使用例
+def test_various_scenarios(test_client, configurable_mock_rag):
+    """様々なシナリオのテスト"""
+    # 正常ケース
+    with configurable_mock_rag("python_basic"):
+        response = test_client.post("/api/query", json={"query": "Python"})
+        assert response.status_code == 200
+    
+    # エラーケース
+    with configurable_mock_rag("error_case"):
+        response = test_client.post("/api/query", json={"query": "Python"})
+        assert response.status_code == 500
 ```
 
 ---
@@ -395,7 +678,8 @@ markers =
     integration: Integration tests across multiple components  
     e2e: End-to-end tests with real components
     slow: Tests that take longer than 5 seconds
-    api: Tests that require external API access
+    api: API endpoint tests (FastAPI/Web)
+    external_api: Tests that require external API access
     database: Tests that require database access
     auth: Tests that require authentication
     critical: Tests for critical business logic

@@ -214,6 +214,214 @@ def mock_rag_components(
 
 
 # ======================================
+# API Testing Fixtures
+# ======================================
+
+@pytest.fixture
+def test_client():
+    """Create a FastAPI test client for API endpoint testing."""
+    from fastapi.testclient import TestClient
+    from unittest.mock import patch
+    
+    # Import app but patch static file mounting to avoid filesystem dependencies
+    with patch('fastapi.staticfiles.StaticFiles'):
+        from app import app
+        client = TestClient(app)
+        yield client
+
+
+@pytest.fixture
+def api_test_data():
+    """Provide test data for API endpoint testing."""
+    return {
+        "valid_query": {
+            "query": "What is Python programming?",
+            "session_id": None
+        },
+        "query_with_session": {
+            "query": "How do I use variables?",
+            "session_id": "test_session_123"
+        },
+        "empty_query": {
+            "query": ""
+        },
+        "expected_response": {
+            "answer": "Python is a high-level programming language.",
+            "sources": [
+                {"text": "Python basics lesson", "url": "https://example.com/lesson1"},
+                {"text": "Programming fundamentals", "url": None}
+            ],
+            "session_id": "test_session_123"
+        },
+        "course_analytics": {
+            "total_courses": 3,
+            "course_titles": ["Python Basics", "Web Development", "Data Science"]
+        }
+    }
+
+
+@pytest.fixture
+def mock_fastapi_rag_system():
+    """Mock RAG system specifically configured for FastAPI testing."""
+    with patch('app.rag_system') as mock_rag:
+        # Configure realistic mock responses
+        mock_rag.query.return_value = (
+            "Python is a versatile programming language used for web development, data science, and automation.",
+            [
+                {"text": "Python Introduction - Lesson 1", "url": "https://example.com/python/lesson1"},
+                {"text": "Python Features Overview", "url": "https://example.com/python/features"},
+                {"text": "Why Choose Python", "url": None}
+            ]
+        )
+        
+        mock_rag.get_course_analytics.return_value = {
+            "total_courses": 4,
+            "course_titles": [
+                "Python for Beginners",
+                "Advanced Python Concepts", 
+                "Web Development with FastAPI",
+                "Data Analysis with Pandas"
+            ]
+        }
+        
+        mock_rag.session_manager.create_session.return_value = "mock_session_456"
+        mock_rag.add_course_folder.return_value = (4, 200)  # 4 courses, 200 chunks
+        
+        yield mock_rag
+
+
+@pytest.fixture
+def api_error_scenarios():
+    """Provide various error scenarios for API testing."""
+    return {
+        "rag_system_error": Exception("Vector database connection failed"),
+        "ai_generation_error": Exception("Anthropic API rate limit exceeded"), 
+        "session_error": Exception("Session storage unavailable"),
+        "analytics_error": Exception("Course analytics service down"),
+        "invalid_json": '{"query": "incomplete json"',
+        "missing_query": {"session_id": "test123"},
+        "malformed_request": {"query": None, "extra_field": "unexpected"}
+    }
+
+
+# ======================================
+# HTTP Client Fixtures
+# ======================================
+
+@pytest.fixture
+def mock_httpx_client():
+    """Mock httpx client for testing external API calls."""
+    import httpx
+    from unittest.mock import AsyncMock
+    
+    mock_client = AsyncMock(spec=httpx.AsyncClient)
+    return mock_client
+
+
+# ======================================
+# Test Environment Setup
+# ======================================
+
+@pytest.fixture(autouse=True)
+def setup_test_environment():
+    """Automatically set up test environment for all tests."""
+    import os
+    import tempfile
+    import shutil
+    
+    # Create temporary directory for test files
+    temp_dir = tempfile.mkdtemp(prefix="rag_test_")
+    original_cwd = os.getcwd()
+    
+    # Set test environment variables
+    test_env = {
+        'ANTHROPIC_API_KEY': 'test-api-key-for-testing',
+        'CHROMA_PATH': os.path.join(temp_dir, 'test_chroma_db'),
+        'TESTING': '1'
+    }
+    
+    # Backup original environment variables
+    original_env = {}
+    for key, value in test_env.items():
+        original_env[key] = os.environ.get(key)
+        os.environ[key] = value
+    
+    yield {
+        'temp_dir': temp_dir,
+        'original_cwd': original_cwd,
+        'test_env': test_env
+    }
+    
+    # Cleanup
+    for key, value in original_env.items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value
+    
+    # Remove temporary directory
+    if os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@pytest.fixture
+def sample_course_documents():
+    """Provide sample course documents for testing document processing."""
+    return [
+        {
+            "filename": "python_basics.txt",
+            "content": """Course Title: Python Programming Basics
+Course Link: https://example.com/python-basics
+Course Instructor: Dr. Jane Smith
+
+Lesson 0: Introduction to Python
+Lesson Link: https://example.com/python-basics/lesson-0
+Python is a high-level, interpreted programming language known for its simplicity and readability.
+
+Lesson 1: Variables and Data Types
+Lesson Link: https://example.com/python-basics/lesson-1
+In Python, variables are used to store data. Common data types include strings, integers, and floats.
+
+Lesson 2: Control Structures
+Lesson Link: https://example.com/python-basics/lesson-2
+Python provides if statements, loops, and functions to control program flow."""
+        },
+        {
+            "filename": "web_development.txt", 
+            "content": """Course Title: Web Development with FastAPI
+Course Link: https://example.com/fastapi-course
+Course Instructor: Prof. John Doe
+
+Lesson 0: Introduction to FastAPI
+Lesson Link: https://example.com/fastapi-course/lesson-0
+FastAPI is a modern, fast web framework for building APIs with Python based on standard Python type hints.
+
+Lesson 1: Creating Your First API
+Lesson Link: https://example.com/fastapi-course/lesson-1
+Learn how to create a simple API endpoint using FastAPI decorators and request models."""
+        }
+    ]
+
+
+# ======================================
+# Performance Testing Fixtures
+# ======================================
+
+@pytest.fixture
+def performance_test_data():
+    """Provide data for performance and load testing."""
+    return {
+        "concurrent_requests": 10,
+        "large_query": "What is " + "Python " * 100 + "programming?",
+        "multiple_sessions": [f"session_{i}" for i in range(20)],
+        "stress_queries": [
+            f"Query number {i} about Python programming concepts"
+            for i in range(50)
+        ]
+    }
+
+
+# ======================================
 # Test Markers Configuration
 # ======================================
 
@@ -223,3 +431,5 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "integration: Integration tests across multiple components")
     config.addinivalue_line("markers", "e2e: End-to-end tests with real components")
     config.addinivalue_line("markers", "slow: Tests that take longer to run")
+    config.addinivalue_line("markers", "api: API endpoint tests")
+    config.addinivalue_line("markers", "performance: Performance and load tests")

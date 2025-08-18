@@ -757,9 +757,330 @@ def test_api_error_handling(self, ai_generator):
 
 ---
 
-# レベル4: 上級実践編 🚀
+# レベル4: API・Web アプリケーションテスト編 🌐
 
-## 4.1 テストコードの保守性向上
+## 4.1 FastAPI アプリケーションのテスト
+
+### APIテストの重要性
+
+Webアプリケーション開発では、APIエンドポイントが正しく動作することを確認するテストが重要です。RAGシステムのようなWeb API では、以下の点をテストする必要があります：
+
+- エンドポイントが正しいレスポンスを返すか
+- リクエストの検証が適切に行われるか  
+- エラー処理が適切に動作するか
+- セッション管理が正しく機能するか
+
+### TestClient を使ったAPIテスト
+
+**基本的なAPIテストの書き方：**
+
+```python
+# test_api_basic.py
+from fastapi.testclient import TestClient
+from unittest.mock import patch, Mock
+import pytest
+
+# テスト用のアプリを作成（静的ファイルマウントを回避）
+def create_test_app():
+    """テスト用FastAPIアプリを作成"""
+    from fastapi import FastAPI, HTTPException
+    from app import QueryRequest, QueryResponse, Source, CourseStats
+    
+    app = FastAPI()
+    
+    # テスト用エンドポイント定義
+    @app.post("/api/query", response_model=QueryResponse)
+    async def test_query(request: QueryRequest):
+        # モック化されたRAGシステムを使用
+        return QueryResponse(
+            answer="テスト応答",
+            sources=[Source(text="テストソース", url=None)],
+            session_id="test_session_123"
+        )
+    
+    return app
+
+@pytest.fixture
+def client():
+    """テストクライアント"""
+    app = create_test_app()
+    return TestClient(app)
+
+def test_query_endpoint_basic(client):
+    """クエリエンドポイントの基本テスト"""
+    # APIリクエスト送信
+    response = client.post(
+        "/api/query",
+        json={"query": "Python とは何ですか？"}
+    )
+    
+    # レスポンス検証
+    assert response.status_code == 200
+    data = response.json()
+    
+    assert "answer" in data
+    assert "sources" in data 
+    assert "session_id" in data
+    assert data["answer"] == "テスト応答"
+```
+
+### より実践的なAPIテスト
+
+**実際のRAGシステムを模擬したテスト：**
+
+```python
+# test_api_advanced.py
+import pytest
+from fastapi.testclient import TestClient
+from unittest.mock import patch, Mock
+
+@pytest.fixture
+def mock_rag_system():
+    """RAGシステムのモック"""
+    with patch('app.rag_system') as mock:
+        # リアルな応答を設定
+        mock.query.return_value = (
+            "Pythonは高レベルのプログラミング言語です。",
+            [
+                {"text": "Python入門", "url": "https://example.com/lesson1"},
+                {"text": "プログラミング基礎", "url": None}
+            ]
+        )
+        mock.session_manager.create_session.return_value = "session_456"
+        mock.get_course_analytics.return_value = {
+            "total_courses": 3,
+            "course_titles": ["Python基礎", "Web開発", "データ分析"]
+        }
+        yield mock
+
+@pytest.fixture 
+def client(mock_rag_system):
+    """実際のアプリを使ったテストクライアント"""
+    from app import app
+    # 静的ファイルマウントを一時的に無効化
+    with patch('app.StaticFiles'):
+        return TestClient(app)
+
+def test_conversation_flow(client):
+    """会話フローのテスト"""
+    # 最初のクエリ（新しいセッション）
+    response1 = client.post(
+        "/api/query",
+        json={"query": "Pythonとは？"}
+    )
+    assert response1.status_code == 200
+    session_id = response1.json()["session_id"]
+    
+    # フォローアップクエリ（既存セッション）
+    response2 = client.post(
+        "/api/query",
+        json={
+            "query": "変数の使い方は？",
+            "session_id": session_id
+        }
+    )
+    assert response2.status_code == 200
+    assert response2.json()["session_id"] == session_id
+
+def test_course_stats_endpoint(client):
+    """コース統計エンドポイントのテスト"""
+    response = client.get("/api/courses")
+    
+    assert response.status_code == 200
+    data = response.json()
+    
+    assert data["total_courses"] == 3
+    assert len(data["course_titles"]) == 3
+    assert "Python基礎" in data["course_titles"]
+
+def test_error_handling(client):
+    """エラーハンドリングのテスト"""
+    # 無効なリクエスト
+    response = client.post(
+        "/api/query",
+        json={"invalid_field": "test"}
+    )
+    assert response.status_code == 422  # バリデーションエラー
+    
+    # RAGシステムエラーのシミュレーション
+    with patch('app.rag_system') as mock_rag:
+        mock_rag.query.side_effect = Exception("データベース接続エラー")
+        
+        response = client.post(
+            "/api/query", 
+            json={"query": "test"}
+        )
+        assert response.status_code == 500
+```
+
+## 4.2 テストfixtureの高度な活用
+
+### APIテスト用fixture設計
+
+**階層的なfixture構成：**
+
+```python
+# conftest.py（APIテスト用の追加）
+import pytest
+from fastapi.testclient import TestClient
+from unittest.mock import patch, Mock
+
+@pytest.fixture
+def api_test_data():
+    """APIテスト用データ"""
+    return {
+        "valid_queries": [
+            "Pythonとは何ですか？",
+            "変数の使い方を教えて",
+            "関数の定義方法は？"
+        ],
+        "invalid_queries": [
+            "",  # 空文字
+            "a" * 10000,  # 長すぎる文字列
+        ],
+        "expected_responses": {
+            "python_info": {
+                "answer": "Pythonは高レベルプログラミング言語です",
+                "sources": [
+                    {"text": "Python入門", "url": "https://example.com"}
+                ]
+            }
+        }
+    }
+
+@pytest.fixture
+def mock_ai_responses():
+    """AI応答のモック設定"""
+    return {
+        "python_query": "Pythonは汎用プログラミング言語です。",
+        "error_query": Exception("AI API エラー"),
+        "empty_query": "申し訳ございませんが、質問を明確にしてください。"
+    }
+
+@pytest.fixture
+def api_client(mock_ai_responses):
+    """設定済みAPIクライアント"""
+    with patch('app.rag_system') as mock_rag:
+        # デフォルトの動作を設定
+        mock_rag.query.return_value = (
+            mock_ai_responses["python_query"],
+            [{"text": "参考資料", "url": None}]
+        )
+        mock_rag.session_manager.create_session.return_value = "test_session"
+        
+        with patch('app.StaticFiles'):
+            from app import app
+            yield TestClient(app)
+```
+
+### パラメータ化されたAPIテスト
+
+**複数のシナリオを効率的にテスト：**
+
+```python
+@pytest.mark.parametrize("query, expected_status, expected_answer", [
+    ("Pythonとは？", 200, "Pythonは高レベルプログラミング言語です"),
+    ("", 422, None),  # バリデーションエラー
+    ("有効なクエリ", 200, "適切な応答"),
+])
+def test_query_various_inputs(api_client, query, expected_status, expected_answer):
+    """様々な入力でのクエリテスト"""
+    if expected_status == 200:
+        response = api_client.post(
+            "/api/query",
+            json={"query": query}
+        )
+    else:
+        response = api_client.post(
+            "/api/query", 
+            json={"invalid": "data"} if expected_status == 422 else {"query": query}
+        )
+    
+    assert response.status_code == expected_status
+    
+    if expected_status == 200:
+        data = response.json()
+        assert expected_answer in data["answer"]
+
+@pytest.mark.parametrize("course_count, expected_titles", [
+    (0, []),
+    (1, ["Python基礎"]),
+    (3, ["Python基礎", "Web開発", "データ分析"]),
+])
+def test_course_analytics_scenarios(api_client, course_count, expected_titles):
+    """コース分析の様々なシナリオ"""
+    with patch('app.rag_system') as mock_rag:
+        mock_rag.get_course_analytics.return_value = {
+            "total_courses": course_count,
+            "course_titles": expected_titles
+        }
+        
+        response = api_client.get("/api/courses")
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert data["total_courses"] == course_count
+        assert data["course_titles"] == expected_titles
+```
+
+## 4.3 マーカーを使ったAPIテスト分類
+
+### APIテスト専用マーカー
+
+```python
+# pytest.ini
+[tool:pytest]
+markers =
+    unit: Unit tests for individual components
+    integration: Integration tests across multiple components
+    e2e: End-to-end tests with real components
+    slow: Tests that take longer to run
+    api: API endpoint tests
+    database: Tests that require database access
+
+# テストファイル内でのマーカー使用
+@pytest.mark.api
+class TestAPIEndpoints:
+    """API エンドポイントテスト"""
+    
+    @pytest.mark.api
+    def test_query_endpoint(self, api_client):
+        """クエリエンドポイントテスト"""
+        pass
+    
+    @pytest.mark.api
+    @pytest.mark.slow
+    def test_large_query_processing(self, api_client):
+        """大きなクエリの処理テスト"""
+        pass
+
+@pytest.mark.api
+@pytest.mark.integration
+def test_full_api_workflow(api_client):
+    """完全なAPIワークフローテスト"""
+    # 複数のエンドポイントを連携させたテスト
+    pass
+```
+
+### 実行コマンドの活用
+
+```bash
+# API テストのみ実行
+pytest -m api
+
+# APIテスト以外を実行（高速）
+pytest -m "not api"
+
+# 統合レベルのAPIテスト
+pytest -m "api and integration"
+
+# 開発中の高速フィードバック
+pytest -m "api and not slow" -v
+```
+
+# レベル5: 上級実践編 🚀
+
+## 5.1 テストコードの保守性向上
 
 ### DRY原則の適用
 
@@ -842,7 +1163,7 @@ def test_user_update():
     assert_user_equals(user, expected)
 ```
 
-## 4.2 高度なfixture活用
+## 5.2 高度なfixture活用
 
 ### 動的fixture
 
@@ -896,7 +1217,7 @@ def test_api_integration():
     pass
 ```
 
-## 4.3 CI/CDでの活用
+## 5.3 CI/CDでの活用
 
 ### GitHub Actions設定例
 
@@ -969,7 +1290,7 @@ fi
 echo "✅ 全てのテストが成功しました！"
 ```
 
-## 4.4 チーム開発でのベストプラクティス
+## 5.4 チーム開発でのベストプラクティス
 
 ### テストレビューの観点
 

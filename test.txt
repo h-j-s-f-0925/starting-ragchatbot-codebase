@@ -1,0 +1,9 @@
+This is a test file to verify GitHub Actions functionality.
+
+Created on: 2025-08-19
+Purpose: Testing GitHub Actions workflow execution
+
+Repository: starting-ragchatbot-codebase
+Project: Course Materials RAG System
+
+Test completed successfully!
